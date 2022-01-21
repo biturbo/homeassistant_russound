@@ -17,6 +17,7 @@ from homeassistant.components.media_player.const import (
     SUPPORT_VOLUME_SET,
     SUPPORT_PREVIOUS_TRACK,
     SUPPORT_NEXT_TRACK, 
+    SUPPORT_GROUPING,
 )
 from homeassistant.const import (
     CONF_HOST,
@@ -37,7 +38,8 @@ SUPPORT_RUSSOUND = (
     | SUPPORT_SELECT_SOURCE
     | SUPPORT_PREVIOUS_TRACK
     | SUPPORT_NEXT_TRACK
-
+    | SUPPORT_GROUPING
+    
 )
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
