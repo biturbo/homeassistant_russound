@@ -253,3 +253,9 @@ class RussoundZoneDevice(MediaPlayerEntity):
         """Previous Track."""
         """_LOGGER.warning("trying to execute previous track")"""
         await self._russ.send_zone_event(self._zone_id, "KeyRelease", "Previous")
+        
+    async def async_join_players(self, group_members):
+        """Join `group_members` as a player group with the current player."""
+
+    async def async_unjoin_player(self):
+        """Remove this player from any group."""
