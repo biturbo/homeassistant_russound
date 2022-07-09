@@ -43,7 +43,7 @@ async def async_setup_platform(
     host = config.get(CONF_HOST)
     port = config.get(CONF_PORT)
 
-    russ = Russound(hass.loop, host, port)
+    russ = Russound(hass, host, port)
 
     await russ.connect()
 
