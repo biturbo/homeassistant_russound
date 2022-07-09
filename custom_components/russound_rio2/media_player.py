@@ -1,24 +1,15 @@
-  
 """Support for Russound multizone controllers using RIO Protocol."""
-#from russound_rio import Russound
-from .rio import Russound
+from __future__ import annotations
+
+from russound_rio import Russound
 import voluptuous as vol
-import logging
 
-_LOGGER = logging.getLogger(__name__)
-
-from homeassistant.components.media_player import PLATFORM_SCHEMA, MediaPlayerEntity
-from homeassistant.components.media_player.const import (
-    MEDIA_TYPE_MUSIC,
-    SUPPORT_SELECT_SOURCE,
-    SUPPORT_TURN_OFF,
-    SUPPORT_TURN_ON,
-    SUPPORT_VOLUME_MUTE,
-    SUPPORT_VOLUME_SET,
-    SUPPORT_PREVIOUS_TRACK,
-    SUPPORT_NEXT_TRACK, 
-    SUPPORT_GROUPING,
+from homeassistant.components.media_player import (
+    PLATFORM_SCHEMA,
+    MediaPlayerEntity,
+    MediaPlayerEntityFeature,
 )
+from homeassistant.components.media_player.const import MEDIA_TYPE_MUSIC
 from homeassistant.const import (
     CONF_HOST,
     CONF_NAME,
@@ -27,20 +18,10 @@ from homeassistant.const import (
     STATE_OFF,
     STATE_ON,
 )
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 import homeassistant.helpers.config_validation as cv
-
-SUPPORT_RUSSOUND = (
-    SUPPORT_VOLUME_MUTE
-    | SUPPORT_VOLUME_SET
-    | SUPPORT_TURN_ON
-    | SUPPORT_TURN_OFF
-    | SUPPORT_SELECT_SOURCE
-    | SUPPORT_PREVIOUS_TRACK
-    | SUPPORT_NEXT_TRACK
-    | SUPPORT_GROUPING
-    
-)
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
@@ -50,7 +31,13 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     }
 )
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
+
+async def async_setup_platform(
+    hass: HomeAssistant,
+    config: ConfigType,
+    async_add_entities: AddEntitiesCallback,
+    discovery_info: DiscoveryInfoType | None = None,
+) -> None:
     """Set up the Russound RIO platform."""
 
     host = config.get(CONF_HOST)
@@ -60,20 +47,16 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 
     await russ.connect()
 
-    # Discover sources, presets and zones
+    # Discover sources and zones
     sources = await russ.enumerate_sources()
-    presets = await russ.enumerate_presets()
     valid_zones = await russ.enumerate_zones()
 
     devices = []
     for zone_id, name in valid_zones:
         await russ.watch_zone(zone_id)
-        dev = RussoundZoneDevice(russ, zone_id, name, sources, presets)
+        dev = RussoundZoneDevice(russ, zone_id, name, sources)
         devices.append(dev)
-        
-    for source_id, source_name, source_type in sources:
-        await russ.watch_source(source_id)
-    
+
     @callback
     def on_stop(event):
         """Shutdown cleanly when hass stops."""
@@ -87,21 +70,21 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 class RussoundZoneDevice(MediaPlayerEntity):
     """Representation of a Russound Zone."""
 
-    def __init__(self, russ, zone_id, name, sources, presets):
+    _attr_supported_features = (
+        MediaPlayerEntityFeature.VOLUME_MUTE
+        | MediaPlayerEntityFeature.VOLUME_SET
+        | MediaPlayerEntityFeature.TURN_ON
+        | MediaPlayerEntityFeature.TURN_OFF
+        | MediaPlayerEntityFeature.SELECT_SOURCE
+    )
+
+    def __init__(self, russ, zone_id, name, sources):
         """Initialize the zone device."""
         super().__init__()
-        compliled_sources = []
-        for source_id, source_name, source_type in sources:
-            compliled_sources.append((source_id, source_name, None))
-            if source_type == "RNET AM/FM Tuner (Internal)":
-                for preset_source_id, bank_id, preset_id, index_id, preset_name in presets:
-                    if preset_source_id == source_id:
-                        compliled_sources.append((source_id, source_name + ": " + preset_name, index_id))
         self._name = name
         self._russ = russ
         self._zone_id = zone_id
-        self._sources = compliled_sources
-        self._presets = presets
+        self._sources = sources
 
     def _zone_var(self, name, default=None):
         return self._russ.get_cached_zone_variable(self._zone_id, name, default)
@@ -156,11 +139,6 @@ class RussoundZoneDevice(MediaPlayerEntity):
             return STATE_OFF
 
     @property
-    def supported_features(self):
-        """Flag media player features that are supported."""
-        return SUPPORT_RUSSOUND
-
-    @property
     def source(self):
         """Get the currently selected source."""
         return self._source_na_var("name")
@@ -177,33 +155,18 @@ class RussoundZoneDevice(MediaPlayerEntity):
 
     @property
     def media_title(self):
-        """Title of current playing media."""       
-        if self._source_na_var("songname") != None:
-            return self._source_na_var("songname")
-        elif self._source_na_var("programservicename") != None:
-            return self._source_na_var("programservicename")
-        else:
-            return self._source_na_var("name")
+        """Title of current playing media."""
+        return self._source_na_var("songname")
 
     @property
     def media_artist(self):
         """Artist of current playing media, music track only."""
-        if self._source_na_var("artistname") != None:
-            return self._source_na_var("artistname")
-        elif self._source_na_var("radiotext") != None:
-            return self._source_na_var("radiotext")
-        else:
-            return None
+        return self._source_na_var("artistname")
 
     @property
     def media_album_name(self):
         """Album name of current playing media, music track only."""
-        if self._source_na_var("albumname") != None:
-            return self._source_na_var("albumname")
-        elif self._source_na_var("channel") != None:
-            return self._source_na_var("channel")
-        else:
-            return None
+        return self._source_na_var("albumname")
 
     @property
     def media_image_url(self):
@@ -213,6 +176,7 @@ class RussoundZoneDevice(MediaPlayerEntity):
     @property
     def volume_level(self):
         """Volume level of the media player (0..1).
+
         Value is returned based on a range (0..50).
         Therefore float divide by 50 to get to the required range.
         """
@@ -233,29 +197,8 @@ class RussoundZoneDevice(MediaPlayerEntity):
 
     async def async_select_source(self, source):
         """Select the source input for this zone."""
-        for source_id, source_name, preset_id in self._sources:
-            if source_name.lower() != source.lower():
+        for source_id, name in self._sources:
+            if name.lower() != source.lower():
                 continue
-            if preset_id == None:
-                await self._russ.send_zone_event(self._zone_id, "SelectSource", source_id)
-                break
-            else:
-                await self._russ.send_zone_event(self._zone_id, "SelectSource", source_id)
-                await self._russ.send_zone_event(self._zone_id, "RestorePreset", preset_id)
-                break
-
-    async def async_media_next_track(self):
-        """Next Track."""
-        """_LOGGER.warning("trying to execute next track")"""
-        await self._russ.send_zone_event(self._zone_id, "KeyRelease", "Next")
-    
-    async def async_media_previous_track(self):
-        """Previous Track."""
-        """_LOGGER.warning("trying to execute previous track")"""
-        await self._russ.send_zone_event(self._zone_id, "KeyRelease", "Previous")
-        
-    async def async_join_players(self, group_members):
-        """Join `group_members` as a player group with the current player."""
-
-    async def async_unjoin_player(self):
-        """Remove this player from any group."""
+            await self._russ.send_zone_event(self._zone_id, "SelectSource", source_id)
+            break
