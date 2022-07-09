@@ -39,12 +39,10 @@ async def async_setup_platform(
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
     """Set up the Russound RIO platform."""
+    host = config.get(CONF_HOST)
+    port = config.get(CONF_PORT)
 
-    """host = config.get(CONF_HOST)
-    port = config.get(CONF_PORT)"""
-
-    """russ = Russound(hass, host, port)"""
-    russ = Russound(config[CONF_NAME], config[CONF_HOST])
+    russ = Russound(hass.loop, host, port)
     await russ.connect()
 
     # Discover sources and zones
